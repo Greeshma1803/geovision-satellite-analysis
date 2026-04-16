@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environments
+.venv/
+tf_env/
+
+# Node
+node_modules/
+
+# Model files
+*.pth
+*.h5
+*.keras
+
+# Misc
+.env
+*.zip
