@@ -1,0 +1,11 @@
+flask==3.0.3
+flask-cors==4.0.0
+opencv-python==4.10.0.84
+efficientnet==1.1.1
+numpy>=1.26.4
+Pillow>=11.0.0
+scikit-learn>=1.3.2
+
+# Note: TensorFlow has wheel compatibility issues on Python 3.12 Windows
+# Install tensorflow separately or use a different Python version < 3.12
+

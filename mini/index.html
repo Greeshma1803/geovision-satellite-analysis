@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EuroSAT Land Use Classifier</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 5px; text-align: center; position: relative; overflow: hidden; }
+        .header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>'); animation: float 20s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-20px) rotate(180deg); } }
+        .header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 2px; position: relative; z-index: 1; }
+        .header p { font-size: 0.75rem; opacity: 0.9; font-weight: 100; position: relative; z-index: 1; }
+        .main-content { padding: 10px 8px 8px; }
+
+        /* Tab Navigation */
+        .tab-nav { display: flex; gap: 2px; margin-bottom: 2px; background: #f1f5f9; padding: 2px; border-radius: 12px; }
+        .tab-btn { flex: 1; padding: 10px 10px; border: none; background: transparent; color: #64748b; font-weight: 600; font-size: 0.95rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; }
+        .tab-btn.active { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Toolbar: Upload + Predict + Annotate in one row */
+        .toolbar { display: flex; gap: 2px; align-items: center; justify-content: center; flex-wrap: wrap; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px; padding: 14px; border: 2px dashed #cbd5e1; margin-bottom: 16px; }
+        .file-input-wrapper { position: relative; display: inline-block; cursor: pointer; }
+        .file-input-wrapper input[type="file"] { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+        .file-input-button { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 12px 18px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; border: none; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .file-input-button:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(79, 70, 229, 0.25); }
+        .file-input-button svg { width: 18px; height: 18px; }
+        .selected-file { padding: 4px 4px; background: white; border-radius: 8px; border-left: 4px solid #4f46e5; font-size: 0.9rem; }
+        .btn { padding: 4px 4px; border: none; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3); }
+        .btn-secondary { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
+        .btn-secondary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3); }
+        .btn-change { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); color: white; }
+        .btn-change:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3); }
+        .btn-icon { background: #0ea5e9; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+        /* Images side by side */
+        .image-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: start; }
+        .image-grid-triple { grid-template-columns: 1fr 1fr 1fr; }
+        .result-card { background: white; border-radius: 8px; padding: 7px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; position: relative; }
+        .result-card h3 { color: #1e293b; margin-bottom: 6px; font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 4px; justify-content: space-between; }
+        .result-card h3 .actions { display: inline-flex; gap: 4px; }
+        .image-container { background: white; border-radius: 8px; padding: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0; }
+        .image-container img { width: 100%; height: 420px; object-fit: contain; border-radius: 10px; background: #f8fafc; }
+        .placeholder { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 2px dashed #cbd5e1; border-radius: 10px; height: 420px; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: 500; }
+        .loading { display: inline-block; width: 18px; height: 18px; border: 3px solid #f3f3f3; border-top: 3px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fecaca; border-radius: 10px; padding: 10px; color: #dc2626; font-weight: 500; margin-top: 10px; }
+        .success { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px; color: #16a34a; font-weight: 500; margin-top: 10px; }
+
+        /* Fullscreen modal */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal.open { display: flex; }
+        .modal-content { position: relative; max-width: 95vw; max-height: 90vh; background: #0b1220; border-radius: 10px; padding: 10px; }
+        .modal-toolbar { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
+        .modal-btn { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+        .modal-img-wrap { overflow: hidden; display: flex; align-items: center; justify-content: center; width: 80vw; max-width: 1200px; height: 80vh; }
+        .modal-img { max-width: 100%; max-height: 100%; transform: scale(1); transition: transform 0.15s ease; }
+
+        @media (max-width: 1024px) { .image-grid { grid-template-columns: 1fr; } .image-grid-triple { grid-template-columns: 1fr; } .header h1 { font-size: 1.7rem; } .main-content { padding: 16px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Real-Time Satellite Image Classification</h1>
+            <p>Satellite image analysis for land use classification and change detection</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="classification">Classification</button>
+                <button class="tab-btn" data-tab="change-detection">Change Detection</button>
+            </div>
+
+            <!-- Classification Tab -->
+            <div class="tab-content active" id="classification">
+                <div class="toolbar">
+                    <div class="file-input-wrapper">
+                        <input type="file" accept="image/*" id="imageInput"/>
+                        <label for="imageInput" class="file-input-button">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                            Choose Image
+                        </label>
+                    </div>
+                    <div class="selected-file" id="selectedFile" style="display:none;"><strong>Selected:</strong> <span id="fileName"></span></div>
+                    <button id="btnPredict" class="btn btn-primary" disabled>
+                        <svg fill="currentColor" viewBox="0 0 20 20" width="16" height="16"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                        
+                    </button>
+                    <button id="btnAnnotate" class="btn btn-secondary" disabled>
+                        <svg fill="currentColor" viewBox="0 0 20 20" width="16" height="16"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                        Annotate
+                    </button>
+                </div>
+
+                <div class="image-grid">
+                    <div class="result-card">
+                        <h3>
+                            <span style="display:inline-flex; align-items:center; gap:8px;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" width="18" height="18"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                                Image Preview
+                            </span>
+                            <span class="actions"><button class="btn-icon" id="fsPreviewBtn">Fullscreen</button></span>
+                        </h3>
+                        <div class="image-container">
+                            <div class="placeholder" id="previewPlaceholder"><span>Upload an image to see preview</span></div>
+                            <img id="preview" alt="preview" style="display: none;" />
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h3>
+                            <span style="display:inline-flex; align-items:center; gap:8px;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" width="18" height="18"><path fill-rule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clip-rule="evenodd"/></svg>
+                                Annotated Result
+                            </span>
+                            <span class="actions"><button class="btn-icon" id="fsAnnotatedBtn">Fullscreen</button></span>
+                        </h3>
+                        <div class="image-container">
+                            <div class="placeholder" id="annotatedPlaceholder"><span>Click Annotate to see results</span></div>
+                            <img id="annotated" alt="annotated" style="display: none;" />
+                        </div>
+                    </div>
+                </div>
+                <div style="display:none">
+                    <div id="result"></div>
+                    <div id="scoresList"></div>
+                </div>
+            </div>
+
+            <!-- Change Detection Tab -->
+            <div class="tab-content" id="change-detection">
+                <div class="toolbar">
+                    <div class="file-input-wrapper">
+                        <input type="file" accept="image/*" id="imageInput1"/>
+                        <label for="imageInput1" class="file-input-button">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                            Image 1 (Before)
+                        </label>
+                    </div>
+                    <div class="selected-file" id="selectedFile1" style="display:none;"><strong>Image 1:</strong> <span id="fileName1"></span></div>
+                    
+                    <div class="file-input-wrapper">
+                        <input type="file" accept="image/*" id="imageInput2"/>
+                        <label for="imageInput2" class="file-input-button">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                            Image 2 (After)
+                        </label>
+                    </div>
+                    <div class="selected-file" id="selectedFile2" style="display:none;"><strong>Image 2:</strong> <span id="fileName2"></span></div>
+                    
+                    <button id="btnDetectChange" class="btn btn-change" disabled>
+                        <svg fill="currentColor" viewBox="0 0 20 20" width="16" height="16"><path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z"/></svg>
+                        Detect Changes
+                    </button>
+                </div>
+
+                <div class="image-grid image-grid-triple">
+                    <div class="result-card">
+                        <h3>
+                            <span style="display:inline-flex; align-items:center; gap:8px;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" width="18" height="18"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                                Before Image
+                            </span>
+                            <span class="actions"><button class="btn-icon" id="fsBefore">Fullscreen</button></span>
+                        </h3>
+                        <div class="image-container">
+                            <div class="placeholder" id="beforePlaceholder"><span>Upload image 1</span></div>
+                            <img id="beforeImg" alt="before" style="display: none;" />
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h3>
+                            <span style="display:inline-flex; align-items:center; gap:8px;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" width="18" height="18"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                                After Image
+                            </span>
+                            <span class="actions"><button class="btn-icon" id="fsAfter">Fullscreen</button></span>
+                        </h3>
+                        <div class="image-container">
+                            <div class="placeholder" id="afterPlaceholder"><span>Upload image 2</span></div>
+                            <img id="afterImg" alt="after" style="display: none;" />
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h3>
+                            <span style="display:inline-flex; align-items:center; gap:8px;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" width="18" height="18"><path fill-rule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clip-rule="evenodd"/></svg>
+                                Change Detection
+                            </span>
+                            <span class="actions"><button class="btn-icon" id="fsChange">Fullscreen</button></span>
+                        </h3>
+                        <div class="image-container">
+                            <div class="placeholder" id="changePlaceholder"><span>Click Detect Changes</span></div>
+                            <img id="changeImg" alt="changes" style="display: none;" />
+                        </div>
+                    </div>
+                </div>
+                <div id="changeResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen/Zoom Modal -->
+    <div class="modal" id="lightbox">
+        <div class="modal-content">
+            <div class="modal-toolbar">
+                <button class="modal-btn" id="zoomInBtn">+</button>
+                <button class="modal-btn" id="zoomOutBtn">-</button>
+                <button class="modal-btn" id="resetZoomBtn">Reset</button>
+                <button class="modal-btn" id="closeModalBtn">Close</button>
+            </div>
+            <div class="modal-img-wrap">
+                <img id="lightboxImg" class="modal-img" src="" alt="fullscreen" />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetTab = btn.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(targetTab).classList.add('active');
+            });
+        });
+
+        // Classification Tab Elements
+        const input = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const annotated = document.getElementById('annotated');
+        const result = document.getElementById('result');
+        const scoresList = document.getElementById('scoresList');
+        //const btnPredict = document.getElementById('btnPredict');
+        const btnAnnotate = document.getElementById('btnAnnotate');
+        const selectedFile = document.getElementById('selectedFile');
+        const fileName = document.getElementById('fileName');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const annotatedPlaceholder = document.getElementById('annotatedPlaceholder');
+        const fsPreviewBtn = document.getElementById('fsPreviewBtn');
+        const fsAnnotatedBtn = document.getElementById('fsAnnotatedBtn');
+
+        // Change Detection Tab Elements
+        const input1 = document.getElementById('imageInput1');
+        const input2 = document.getElementById('imageInput2');
+        const beforeImg = document.getElementById('beforeImg');
+        const afterImg = document.getElementById('afterImg');
+        const changeImg = document.getElementById('changeImg');
+        const btnDetectChange = document.getElementById('btnDetectChange');
+        const selectedFile1 = document.getElementById('selectedFile1');
+        const selectedFile2 = document.getElementById('selectedFile2');
+        const fileName1 = document.getElementById('fileName1');
+        const fileName2 = document.getElementById('fileName2');
+        const beforePlaceholder = document.getElementById('beforePlaceholder');
+        const afterPlaceholder = document.getElementById('afterPlaceholder');
+        const changePlaceholder = document.getElementById('changePlaceholder');
+        const changeResult = document.getElementById('changeResult');
+        const fsBefore = document.getElementById('fsBefore');
+        const fsAfter = document.getElementById('fsAfter');
+        const fsChange = document.getElementById('fsChange');
+
+        // Modal elements
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const resetZoomBtn = document.getElementById('resetZoomBtn');
+        let currentScale = 1;
+
+        function openLightbox(src) {
+            if (!src) return;
+            lightboxImg.src = src;
+            currentScale = 1;
+            lightboxImg.style.transform = 'scale(1)';
+            lightbox.classList.add('open');
+        }
+        function closeLightbox() { lightbox.classList.remove('open'); }
+        function setScale(scale) { currentScale = Math.min(Math.max(scale, 0.25), 6); lightboxImg.style.transform = `scale(${currentScale})`; }
+
+        zoomInBtn.addEventListener('click', () => setScale(currentScale + 0.25));
+        zoomOutBtn.addEventListener('click', () => setScale(currentScale - 0.25));
+        resetZoomBtn.addEventListener('click', () => setScale(1));
+        closeModalBtn.addEventListener('click', closeLightbox);
+        lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+        fsPreviewBtn.addEventListener('click', () => openLightbox(preview.src));
+        fsAnnotatedBtn.addEventListener('click', () => openLightbox(annotated.src));
+        fsBefore.addEventListener('click', () => openLightbox(beforeImg.src));
+        fsAfter.addEventListener('click', () => openLightbox(afterImg.src));
+        fsChange.addEventListener('click', () => openLightbox(changeImg.src));
+
+        function showLoading(button, originalHTML) { 
+            button.dataset.originalHTML = originalHTML;
+            button.innerHTML = '<div class="loading"></div> Processing...'; 
+            button.disabled = true; 
+        }
+        function resetButton(button) { 
+            button.innerHTML = button.dataset.originalHTML || button.innerHTML;
+            button.disabled = false; 
+        }
+        function showResult(content, isError = false) { result.innerHTML = isError ? `<div class="error">${content}</div>` : ''; }
+        function showChangeResult(content, isError = false) { 
+            changeResult.innerHTML = isError ? `<div class="error">${content}</div>` : `<div class="success">${content}</div>`; 
+        }
+
+        // Classification Tab Handlers
+        input.addEventListener('change', () => {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                fileName.textContent = file.name; 
+                selectedFile.style.display = 'block';
+                const url = URL.createObjectURL(file);
+                preview.src = url; 
+                preview.style.display = 'block'; 
+                previewPlaceholder.style.display = 'none';
+                annotated.style.display = 'none'; 
+                annotatedPlaceholder.style.display = 'block';
+                result.innerHTML = '';
+                btnPredict.disabled = false; 
+                btnAnnotate.disabled = false;
+            }
+        });
+
+        btnPredict.addEventListener('click', async () => {
+            if (!input.files || !input.files[0]) { showResult('Please select an image file first.', true); return; }
+            const formData = new FormData(); 
+            formData.append('file', input.files[0]); 
+            const originalHTML = btnPredict.innerHTML;
+            showLoading(btnPredict, originalHTML);
+            try { 
+                const res = await fetch('/api/predict', { method: 'POST', body: formData }); 
+                const data = await res.json(); 
+                if (data.error) throw new Error(data.error); 
+                showResult(data); 
+            }
+            catch (err) { showResult('Error: ' + err.message, true); }
+            finally { resetButton(btnPredict); }
+        });
+
+        btnAnnotate.addEventListener('click', async () => {
+            if (!input.files || !input.files[0]) { showResult('Please select an image file first.', true); return; }
+            const formData = new FormData(); 
+            formData.append('file', input.files[0]); 
+            const originalHTML = btnAnnotate.innerHTML;
+            showLoading(btnAnnotate, originalHTML);
+            try {
+                const res = await fetch('/api/annotate', { method: 'POST', body: formData });
+                const data = await res.json(); 
+                if (data.error) throw new Error(data.error);
+                showResult(data);
+                const annotatedImage = data.data?.annotated_image || data.annotated_image;
+                if (annotatedImage) {
+                    const imageSrc = annotatedImage.startsWith('data:') ? annotatedImage : `data:image/png;base64,${annotatedImage}`;
+                    annotated.src = imageSrc; 
+                    annotated.style.display = 'block'; 
+                    annotatedPlaceholder.style.display = 'none';
+                } else { showResult('No annotated image received from server', true); }
+            } catch (err) { showResult('Error: ' + err.message, true); }
+            finally { resetButton(btnAnnotate); }
+        });
+
+        // Change Detection Tab Handlers
+        input1.addEventListener('change', () => {
+            if (input1.files && input1.files[0]) {
+                const file = input1.files[0];
+                fileName1.textContent = file.name;
+                selectedFile1.style.display = 'block';
+                const url = URL.createObjectURL(file);
+                beforeImg.src = url;
+                beforeImg.style.display = 'block';
+                beforePlaceholder.style.display = 'none';
+                checkBothImagesLoaded();
+            }
+        });
+
+        input2.addEventListener('change', () => {
+            if (input2.files && input2.files[0]) {
+                const file = input2.files[0];
+                fileName2.textContent = file.name;
+                selectedFile2.style.display = 'block';
+                const url = URL.createObjectURL(file);
+                afterImg.src = url;
+                afterImg.style.display = 'block';
+                afterPlaceholder.style.display = 'none';
+                checkBothImagesLoaded();
+            }
+        });
+
+        function checkBothImagesLoaded() {
+            if (input1.files && input1.files[0] && input2.files && input2.files[0]) {
+                btnDetectChange.disabled = false;
+            }
+        }
+
+        btnDetectChange.addEventListener('click', async () => {
+            if (!input1.files || !input1.files[0]) { 
+                showChangeResult('Please select the first image (Before).', true); 
+                return; 
+            }
+            if (!input2.files || !input2.files[0]) { 
+                showChangeResult('Please select the second image (After).', true); 
+                return; 
+            }
+            
+            const formData = new FormData();
+            formData.append('image1', input1.files[0]);
+            formData.append('image2', input2.files[0]);
+            
+            const originalHTML = btnDetectChange.innerHTML;
+            showLoading(btnDetectChange, originalHTML);
+            changeResult.innerHTML = '';
+            
+            try {
+                const res = await fetch('/api/change-detection', { 
+                    method: 'POST', 
+                    body: formData 
+                });
+                const data = await res.json();
+                
+                if (data.error) throw new Error(data.error);
+                
+                const changeImage = data.data?.change_image || data.change_image;
+                if (changeImage) {
+                    const imageSrc = changeImage.startsWith('data:') ? changeImage : `data:image/png;base64,${changeImage}`;
+                    changeImg.src = imageSrc;
+                    changeImg.style.display = 'block';
+                    changePlaceholder.style.display = 'none';
+                    
+                    const changePercent = data.data?.change_percentage || data.change_percentage || 'N/A';
+                    showChangeResult(`Change detection completed! Changed area: ${changePercent}%`);
+                } else {
+                    showChangeResult('No change detection image received from server', true);
+                }
+            } catch (err) {
+                showChangeResult('Error: ' + err.message, true);
+            } finally {
+                resetButton(btnDetectChange);
+            }
+        });
+    </script>
+</body>
+</html>
